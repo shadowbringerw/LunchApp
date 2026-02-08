@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta content="IE=Edge" http-equiv="X-UA-Compatible" />
+    <meta name="description" content="KunLun Lunch App" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>KunLun Lunch</title>
+    <link rel="icon" type="image/png" href="favicon.png" />
+  </head>
+  <body>
+    <script>
+      (function () {
+        function load(src) {
+          return new Promise(function (resolve, reject) {
+            var s = document.createElement("script");
+            s.src = src;
+            s.onload = resolve;
+            s.onerror = reject;
+            document.body.appendChild(s);
+          });
+        }
+        load("flutter_bootstrap.js").catch(function () {
+          return load("main.dart.js");
+        });
+      })();
+    </script>
+  </body>
+</html>
+

@@ -1,0 +1,37 @@
+analyzer:
+  language:
+    strict-casts: true
+    strict-raw-types: true
+  errors:
+    avoid_print: ignore
+linter:
+  rules:
+    - always_declare_return_types
+    - avoid_types_on_closure_parameters
+    - cancel_subscriptions
+    - close_sinks
+    - collection_methods_unrelated_type
+    - comment_references
+    - dangling_library_doc_comments
+    - directives_ordering
+    - discarded_futures
+    - empty_catches
+    - eol_at_end_of_file
+    - literal_only_boolean_expressions
+    - no_adjacent_strings_in_list
+    - no_duplicate_case_values
+    - prefer_const_constructors
+    - prefer_const_declarations
+    - prefer_final_fields
+    - prefer_final_locals
+    - prefer_single_quotes
+    - sort_child_properties_last
+    - sort_constructors_first
+    - sort_pub_dependencies
+    - unawaited_futures
+    - unnecessary_lambdas
+    - unnecessary_library_directive
+    - unnecessary_null_checks
+    - unnecessary_parenthesis
+    - use_super_parameters
+

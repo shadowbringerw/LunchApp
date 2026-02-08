@@ -1,0 +1,11 @@
+{
+  "name": "KunLun Lunch",
+  "short_name": "KunLunLunch",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#111827",
+  "theme_color": "#111827",
+  "description": "Ritual lunch decider with history and weighted random.",
+  "orientation": "portrait-primary"
+}
+

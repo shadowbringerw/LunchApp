@@ -1,0 +1,14 @@
+.DS_Store
+.tools/
+.idea/
+.idea/workspace.xml
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub/
+build/
+backend/target/
+backend/data/
+backend/.mvn/wrapper/maven-wrapper.jar
+backend/.mvn/wrapper/*.class

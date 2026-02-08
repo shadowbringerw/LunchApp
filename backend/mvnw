@@ -1,0 +1,66 @@
+#!/bin/sh
+# ----------------------------------------------------------------------------
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+# ----------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------
+# Maven Wrapper startup batch script, version 3.3.2
+# ----------------------------------------------------------------------------
+
+set -euf
+
+MVNW_REPOURL=""
+MVNW_VERBOSE="${MVNW_VERBOSE:-false}"
+
+basedir="$(cd "$(dirname "$0")" && pwd)"
+
+if [ -z "${JAVA_HOME:-}" ]; then
+  if command -v java >/dev/null 2>&1; then
+    JAVA_EXEC="java"
+  else
+    echo "Error: JAVA_HOME is not set and no 'java' command could be found." >&2
+    exit 1
+  fi
+else
+  JAVA_EXEC="$JAVA_HOME/bin/java"
+fi
+
+if [ "$MVNW_VERBOSE" = "true" ]; then
+  echo "MVNW: base dir=$basedir"
+  echo "MVNW: java=$JAVA_EXEC"
+fi
+
+wrapper_jar="$basedir/.mvn/wrapper/maven-wrapper.jar"
+wrapper_properties="$basedir/.mvn/wrapper/maven-wrapper.properties"
+
+if [ ! -f "$wrapper_jar" ]; then
+  if [ "$MVNW_VERBOSE" = "true" ]; then
+    echo "MVNW: wrapper jar missing, downloading..."
+  fi
+  if [ ! -f "$basedir/.mvn/wrapper/MavenWrapperDownloader.java" ]; then
+    echo "Error: Missing MavenWrapperDownloader.java" >&2
+    exit 1
+  fi
+  (cd "$basedir" && javac -d "$basedir" .mvn/wrapper/MavenWrapperDownloader.java)
+  (cd "$basedir" && "$JAVA_EXEC" -cp "$basedir" -Dmaven.multiModuleProjectDirectory="$basedir" MavenWrapperDownloader)
+fi
+
+exec "$JAVA_EXEC" \
+  -Dmaven.multiModuleProjectDirectory="$basedir" \
+  -classpath "$wrapper_jar" \
+  org.apache.maven.wrapper.MavenWrapperMain "$@"
