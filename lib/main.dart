@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'core/decision_record.dart';
 import 'core/backend_client.dart';
@@ -16,8 +17,20 @@ import 'ui/recent_history.dart';
 import 'ui/result_reveal.dart';
 import 'ui/rpg_menu_selector.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await _preloadFonts();
   runApp(const KunLunLunchApp());
+}
+
+Future<void> _preloadFonts() async {
+  try {
+    final loader = FontLoader('NotoSansSC')
+      ..addFont(rootBundle.load('assets/fonts/NotoSansSC-Regular.ttf'));
+    await loader.load();
+  } catch (e) {
+    debugPrint('[Fonts] preload failed: $e');
+  }
 }
 
 class KunLunLunchApp extends StatelessWidget {
@@ -144,7 +157,7 @@ class _LunchDeciderPageState extends State<LunchDeciderPage> {
         .map((e) => DecisionRecord(choice: e.choice, timestampMs: e.timestampMs))
         .toList()
       ..sort((a, b) => b.timestampMs.compareTo(a.timestampMs));
-    final recent3 = records.take(3).map((e) => e.choice).toList();
+    final recent3 = _recentChoicesByDay(records, daysToTake: 3);
     setState(() {
       _historyRecords = records;
       _recent3 = recent3;
@@ -210,18 +223,15 @@ class _LunchDeciderPageState extends State<LunchDeciderPage> {
         }
 
         final chosen = decideResponse!.choice;
-        final updatedRecent3 = <String>[chosen, ...decideResponse!.recent3]
-            .take(3)
-            .toList();
         _spinTimer?.cancel();
         setState(() {
           _spinning = false;
           _slotText = chosen;
           _finalResult = chosen;
-          _recent3 = updatedRecent3;
+          _recent3 = decideResponse!.recent3;
         });
         print(
-          '[LunchDecider] decide done: chosen="$chosen" recent3=$updatedRecent3 '
+          '[LunchDecider] decide done: chosen="$chosen" recent3=$_recent3 '
           'penalized=${decideResponse!.penalizedChoices}',
         );
         _sfx.win();
@@ -244,12 +254,13 @@ class _LunchDeciderPageState extends State<LunchDeciderPage> {
     tick();
   }
 
-  Future<void> _clearHistory() async {
-    await _backend.clearHistory();
-    await _loadHistory();
+  void _clearCurrentSelection() {
+    _spinTimer?.cancel();
     setState(() {
-      _slotText = '历史已清空，重新开始仪式吧';
+      _selectedOptions = <String>{};
       _finalResult = '';
+      _spinning = false;
+      _slotText = '已清空装备，请重新选择菜单';
     });
   }
 
@@ -327,12 +338,12 @@ class _LunchDeciderPageState extends State<LunchDeciderPage> {
         ),
         actions: [
           TextButton(
-            onPressed: _spinning ? null : _clearHistory,
+            onPressed: _spinning ? null : _clearCurrentSelection,
             style: TextButton.styleFrom(
               foregroundColor:
                   Theme.of(context).colorScheme.onSurface.withOpacity(0.9),
             ),
-            child: const Text('清空历史'),
+            child: const Text('清空当前选择'),
           ),
         ],
       ),
@@ -579,6 +590,22 @@ class _ParsedQuickAdd {
 
   final String name;
   final String? description;
+}
+
+List<String> _recentChoicesByDay(
+  List<DecisionRecord> records, {
+  required int daysToTake,
+}) {
+  final byDay = <String, String>{};
+  for (final r in records) {
+    final d = r.timestamp;
+    final key = '${d.year.toString().padLeft(4, '0')}-'
+        '${d.month.toString().padLeft(2, '0')}-'
+        '${d.day.toString().padLeft(2, '0')}';
+    byDay.putIfAbsent(key, () => r.choice);
+    if (byDay.length >= daysToTake) break;
+  }
+  return byDay.values.toList(growable: false);
 }
 
 _ParsedQuickAdd _parseQuickAdd(String raw) {

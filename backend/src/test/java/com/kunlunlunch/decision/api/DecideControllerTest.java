@@ -15,7 +15,13 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
-@SpringBootTest
+@SpringBootTest(
+    properties = {
+      "spring.datasource.url=jdbc:h2:mem:kunlun-lunch-test;MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
+      "spring.datasource.username=sa",
+      "spring.datasource.password=",
+      "spring.jpa.hibernate.ddl-auto=create-drop"
+    })
 @AutoConfigureMockMvc
 class DecideControllerTest {
 
@@ -33,12 +39,40 @@ class DecideControllerTest {
         .andExpect(jsonPath("$.choice").exists())
         .andExpect(jsonPath("$.timestampMs").exists())
         .andExpect(jsonPath("$", hasKey("recent3")))
-        .andExpect(jsonPath("$", hasKey("penalizedChoices")));
+        .andExpect(jsonPath("$", hasKey("penalizedChoices")))
+        .andExpect(jsonPath("$", hasKey("recent3DaysBefore")));
 
     mvc.perform(get("/api/history?limit=10"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[0].choice").exists())
         .andExpect(jsonPath("$[0].timestampMs").exists());
+  }
+
+  @Test
+  void demo_reset_should_seed_3_days() throws Exception {
+    mvc.perform(post("/api/history/demo")).andExpect(status().isOk());
+
+    mvc.perform(get("/api/history?limit=10"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].choice", is("卢布朗咖喱")))
+        .andExpect(jsonPath("$[1].choice", is("肯德基")))
+        .andExpect(jsonPath("$[2].choice", is("重庆小面")));
+  }
+
+  @Test
+  void seed_should_insert_specific_day_without_clearing() throws Exception {
+    mvc.perform(post("/api/history/demo")).andExpect(status().isOk());
+
+    mvc.perform(
+            post("/api/history/seed")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"choice\":\"赛百味\",\"date\":\"2026-02-08\"}"))
+        .andExpect(status().isOk());
+
+    mvc.perform(get("/api/history?limit=10"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].choice", is("赛百味")))
+        .andExpect(jsonPath("$[1].choice", is("卢布朗咖喱")));
   }
 
   @Test

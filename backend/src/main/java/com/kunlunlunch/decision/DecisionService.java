@@ -1,8 +1,13 @@
 package com.kunlunlunch.decision;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
@@ -32,13 +37,19 @@ public class DecisionService {
       throw new IllegalArgumentException("options must not be empty");
     }
 
-    final List<DecisionRecordEntity> last3 = repository.findAllByOrderByDecidedAtDesc(PageRequest.of(0, 3));
-    final List<String> recent3 = last3.stream().map(DecisionRecordEntity::getChoice).toList();
-    final Set<String> penalized = repeatedChoices(recent3);
+    final ZoneId zoneId = ZoneId.systemDefault();
+    final List<DecisionRecordEntity> recentRecords =
+        repository.findAllByOrderByDecidedAtDesc(PageRequest.of(0, 200));
+    final List<String> recent3DaysBefore = recentChoicesByDay(recentRecords, 3, zoneId);
+    final Set<String> penalized = repeatedChoices(recent3DaysBefore);
     final String choice = weightedPick(options, penalized);
 
     final DecisionRecordEntity saved = repository.save(new DecisionRecordEntity(choice, Instant.now()));
-    return new DecideResult(saved, recent3, penalized);
+    final ArrayList<DecisionRecordEntity> afterRecords = new ArrayList<>(recentRecords.size() + 1);
+    afterRecords.add(saved);
+    afterRecords.addAll(recentRecords);
+    final List<String> recent3DaysAfter = recentChoicesByDay(afterRecords, 3, zoneId);
+    return new DecideResult(saved, recent3DaysBefore, recent3DaysAfter, penalized);
   }
 
   @Transactional(readOnly = true)
@@ -50,6 +61,24 @@ public class DecisionService {
   @Transactional
   public void clearHistory() {
     repository.deleteAllInBatch();
+  }
+
+  @Transactional
+  public void resetHistoryToDemo() {
+    repository.deleteAllInBatch();
+
+    final ZoneId zoneId = ZoneId.systemDefault();
+    final List<DecisionRecordEntity> demo = List.of(
+        new DecisionRecordEntity("重庆小面", LocalDate.of(2026, 2, 5).atTime(LocalTime.NOON).atZone(zoneId).toInstant()),
+        new DecisionRecordEntity("肯德基", LocalDate.of(2026, 2, 6).atTime(LocalTime.NOON).atZone(zoneId).toInstant()),
+        new DecisionRecordEntity("卢布朗咖喱", LocalDate.of(2026, 2, 7).atTime(LocalTime.NOON).atZone(zoneId).toInstant())
+    );
+    repository.saveAll(demo);
+  }
+
+  @Transactional
+  public void seedHistory(String choice, Instant decidedAt) {
+    repository.save(new DecisionRecordEntity(choice, decidedAt));
   }
 
   private String weightedPick(List<String> options, Set<String> penalizedChoices) {
@@ -88,6 +117,23 @@ public class DecisionService {
     return repeated;
   }
 
-  public record DecideResult(DecisionRecordEntity savedRecord, List<String> recent3, Set<String> penalizedChoices) {}
-}
+  static List<String> recentChoicesByDay(
+      List<DecisionRecordEntity> records,
+      int days,
+      ZoneId zoneId) {
+    final int safeDays = Math.max(1, Math.min(days, 30));
+    final LinkedHashMap<LocalDate, String> byDay = new LinkedHashMap<>();
+    for (final DecisionRecordEntity r : records) {
+      final LocalDate day = r.getDecidedAt().atZone(zoneId).toLocalDate();
+      byDay.putIfAbsent(day, r.getChoice());
+      if (byDay.size() >= safeDays) break;
+    }
+    return List.copyOf(byDay.values());
+  }
 
+  public record DecideResult(
+      DecisionRecordEntity savedRecord,
+      List<String> recent3DaysBefore,
+      List<String> recent3DaysAfter,
+      Set<String> penalizedChoices) {}
+}

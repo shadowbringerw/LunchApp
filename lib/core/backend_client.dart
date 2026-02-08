@@ -133,4 +133,3 @@ class HistoryItem {
     return HistoryItem(choice: choice, timestampMs: timestampMs);
   }
 }
-

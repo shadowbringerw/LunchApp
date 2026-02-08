@@ -1,79 +1,105 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:html' as html;
-import 'dart:js_util' as js_util;
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 class WebAudioSfx {
-  Object? _ctx;
+  _AudioPool? _tick;
+  _AudioPool? _winLow;
+  _AudioPool? _winHigh;
 
-  Object? _ensure() {
-    _ctx ??= _newAudioContext();
-    return _ctx;
+  void tick() {
+    (_tick ??= _AudioPool(_wavDataUrl(freqHz: 880, ms: 28, gain: 0.10))).play();
   }
-
-  void tick() => _beep(freqHz: 880, ms: 28, gain: 0.03);
 
   void win() {
-    _beep(freqHz: 523, ms: 90, gain: 0.05);
+    (_winLow ??= _AudioPool(_wavDataUrl(freqHz: 523, ms: 90, gain: 0.12))).play();
     Timer(const Duration(milliseconds: 110), () {
-      _beep(freqHz: 659, ms: 110, gain: 0.05);
+      (_winHigh ??= _AudioPool(_wavDataUrl(freqHz: 659, ms: 110, gain: 0.12)))
+          .play();
     });
   }
+}
 
-  Object? _newAudioContext() {
+class _AudioPool {
+  _AudioPool(this.url, {this.size = 4})
+      : _players = List.generate(size, (_) => html.AudioElement(url));
+
+  final String url;
+  final int size;
+  final List<html.AudioElement> _players;
+  int _idx = 0;
+
+  void play() {
+    final player = _players[_idx];
+    _idx = (_idx + 1) % _players.length;
     try {
-      final ctor = js_util.getProperty<Object?>(html.window, 'AudioContext');
-      if (ctor != null) {
-        return js_util.callConstructor<Object>(ctor, const []);
-      }
-      final webkit = js_util.getProperty<Object?>(html.window, 'webkitAudioContext');
-      if (webkit != null) {
-        return js_util.callConstructor<Object>(webkit, const []);
-      }
+      player.currentTime = 0;
+      unawaited(player.play());
     } catch (_) {
-      // ignore
-    }
-    return null;
-  }
-
-  void _beep({
-    required num freqHz,
-    required int ms,
-    required num gain,
-  }) {
-    final ctx = _ensure();
-    if (ctx == null) return;
-
-    try {
-      final now = (js_util.getProperty(ctx, 'currentTime') as num?) ?? 0;
-      final osc = js_util.callMethod<Object>(ctx, 'createOscillator', const []);
-      final g = js_util.callMethod<Object>(ctx, 'createGain', const []);
-      final dest = js_util.getProperty<Object>(ctx, 'destination');
-
-      js_util.setProperty(osc, 'type', 'sine');
-
-      final freqParam = js_util.getProperty<Object?>(osc, 'frequency');
-      if (freqParam != null) {
-        js_util.callMethod(freqParam, 'setValueAtTime', [freqHz, now]);
-      }
-
-      final gainParam = js_util.getProperty<Object?>(g, 'gain');
-      if (gainParam != null) {
-        js_util.callMethod(gainParam, 'setValueAtTime', [0, now]);
-        js_util.callMethod(gainParam, 'linearRampToValueAtTime', [gain, now + 0.005]);
-        js_util.callMethod(gainParam, 'exponentialRampToValueAtTime', [
-          math.max(0.0001, gain / 25),
-          now + (ms / 1000.0),
-        ]);
-      }
-
-      js_util.callMethod(osc, 'connect', [g]);
-      js_util.callMethod(g, 'connect', [dest]);
-
-      js_util.callMethod(osc, 'start', [now]);
-      js_util.callMethod(osc, 'stop', [now + (ms / 1000.0) + 0.02]);
-    } catch (e) {
-      print('[WebAudioSfx] beep failed: $e');
+      // Ignore autoplay / timing issues.
     }
   }
+}
+
+String _wavDataUrl({
+  required num freqHz,
+  required int ms,
+  required num gain,
+}) {
+  const sampleRate = 44100;
+  final samples = (sampleRate * ms / 1000).clamp(1, 1 << 31).toInt();
+
+  final attackSamples = (sampleRate * 0.010).round().clamp(1, samples);
+  final releaseSamples = (sampleRate * 0.020).round().clamp(1, samples);
+
+  final pcm = BytesBuilder(copy: false);
+  for (int i = 0; i < samples; i++) {
+    final t = i / sampleRate;
+
+    final attack = math.min(1.0, i / attackSamples);
+    final release = math.min(1.0, (samples - i) / releaseSamples);
+    final env = attack * release;
+
+    final v = math.sin(2 * math.pi * freqHz * t) * gain * env;
+    final s = (v * 32767).round().clamp(-32768, 32767);
+    pcm.addByte(s & 0xFF);
+    pcm.addByte((s >> 8) & 0xFF);
+  }
+
+  final pcmBytes = pcm.toBytes();
+  final bytes = BytesBuilder(copy: false);
+
+  void u32(int v) {
+    bytes.addByte(v & 0xFF);
+    bytes.addByte((v >> 8) & 0xFF);
+    bytes.addByte((v >> 16) & 0xFF);
+    bytes.addByte((v >> 24) & 0xFF);
+  }
+
+  void u16(int v) {
+    bytes.addByte(v & 0xFF);
+    bytes.addByte((v >> 8) & 0xFF);
+  }
+
+  bytes.add(ascii.encode('RIFF'));
+  u32(36 + pcmBytes.length);
+  bytes.add(ascii.encode('WAVE'));
+
+  bytes.add(ascii.encode('fmt '));
+  u32(16); // PCM
+  u16(1); // AudioFormat
+  u16(1); // NumChannels
+  u32(sampleRate);
+  u32(sampleRate * 2); // ByteRate = sampleRate * blockAlign
+  u16(2); // BlockAlign = channels * bytesPerSample
+  u16(16); // BitsPerSample
+
+  bytes.add(ascii.encode('data'));
+  u32(pcmBytes.length);
+  bytes.add(pcmBytes);
+
+  final wav = bytes.takeBytes();
+  return 'data:audio/wav;base64,${base64Encode(Uint8List.fromList(wav))}';
 }

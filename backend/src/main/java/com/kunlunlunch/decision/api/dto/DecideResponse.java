@@ -7,5 +7,5 @@ public record DecideResponse(
     String choice,
     long timestampMs,
     List<String> recent3,
-    Set<String> penalizedChoices) {}
-
+    Set<String> penalizedChoices,
+    List<String> recent3DaysBefore) {}
